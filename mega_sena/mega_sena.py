@@ -7,27 +7,53 @@ ARQUIVO_NOVOS = "numeros_novos.txt"
 QUANTIDADE_NOVOS_JOGOS = 16
 
 
-def parse_linha(linha: str):
-    linha = linha.strip().rstrip(",")
-    partes = linha.replace("+", "-").split("-")
-    numeros = sorted(int(p) for p in partes)
-    if len(numeros) != 6:
-        raise ValueError(f"Linha inválida: {linha}")
-    if any(n < 1 or n > 60 for n in numeros):
-        raise ValueError(f"Número fora do intervalo 1–60: {linha}")
-    return tuple(numeros)
+def erro(msg):
+    print(f"\n❌ ERRO: {msg}")
+    exit(1)
+
+
+def parse_linha(linha: str, numero_linha: int):
+    linha = linha.strip()
+
+    if not linha:
+        return None
+
+    partes = linha.split("-")
+
+    if len(partes) != 6:
+        erro(f"Linha {numero_linha}: deve conter exatamente 6 números.")
+
+    try:
+        numeros = [int(p) for p in partes]
+    except ValueError:
+        erro(f"Linha {numero_linha}: contém valor não numérico.")
+
+    if len(set(numeros)) != 6:
+        erro(f"Linha {numero_linha}: números duplicados na mesma combinação.")
+
+    for n in numeros:
+        if n < 1 or n > 60:
+            erro(f"Linha {numero_linha}: número fora do intervalo (1–60).")
+
+    return tuple(sorted(numeros))
 
 
 def carregar_jogos_existentes():
     caminho = Path(ARQUIVO_EXISTENTES)
+
     if not caminho.exists():
-        raise FileNotFoundError(f"Arquivo '{ARQUIVO_EXISTENTES}' não encontrado.")
+        erro(f"Arquivo '{ARQUIVO_EXISTENTES}' não encontrado.")
 
     jogos = []
+
     with caminho.open(encoding="utf-8") as f:
-        for linha in f:
-            if linha.strip():
-                jogos.append(parse_linha(linha))
+        for i, linha in enumerate(f, start=1):
+            jogo = parse_linha(linha, i)
+            if jogo:
+                jogos.append(jogo)
+
+    if not jogos:
+        erro("Arquivo de números existentes está vazio.")
 
     return jogos
 
@@ -37,22 +63,18 @@ def detectar_duplicados(jogos):
     for jogo in jogos:
         contador[jogo] += 1
 
-    duplicados = {jogo: qtd for jogo, qtd in contador.items() if qtd > 1}
-    return duplicados
+    return {jogo: qtd for jogo, qtd in contador.items() if qtd > 1}
 
 
 def gerar_novos_jogos(jogos_existentes):
-    existentes_set = set(jogos_existentes)
+    existentes = set(jogos_existentes)
     novos = set()
     rng = secrets.SystemRandom()
 
     while len(novos) < QUANTIDADE_NOVOS_JOGOS:
         jogo = tuple(sorted(rng.sample(range(1, 61), 6)))
 
-        if jogo in existentes_set:
-            continue
-
-        if jogo in novos:
+        if jogo in existentes or jogo in novos:
             continue
 
         novos.add(jogo)
@@ -61,36 +83,34 @@ def gerar_novos_jogos(jogos_existentes):
 
 
 def salvar_novos_jogos(jogos):
-    with open(ARQUIVO_NOVOS, "w", encoding="utf-8") as f:
+    caminho = Path(ARQUIVO_NOVOS)
+
+    with caminho.open("w", encoding="utf-8") as f:
         for jogo in jogos:
-            linha = "-".join(f"{n:02d}" for n in jogo)
-            f.write(linha + "\n")
+            f.write("-".join(f"{n:02d}" for n in jogo) + "\n")
 
 
 def main():
-    print("📂 Lendo arquivo de números existentes...")
+    print("📂 Lendo números existentes...")
     jogos_existentes = carregar_jogos_existentes()
-
-    print(f"🔢 Total de jogos lidos: {len(jogos_existentes)}")
+    print(f"🔢 Total de jogos válidos: {len(jogos_existentes)}")
 
     print("\n🔍 Verificando duplicados...")
     duplicados = detectar_duplicados(jogos_existentes)
 
     if duplicados:
-        print("⚠️ DUPLICADOS ENCONTRADOS:")
+        print("⚠️ COMBINAÇÕES DUPLICADAS ENCONTRADAS:")
         for jogo, qtd in duplicados.items():
-            print(f"  {jogo} → {qtd} vezes")
+            print(f"  {'-'.join(f'{n:02d}' for n in jogo)} → {qtd} vezes")
     else:
-        print("✅ Nenhum jogo duplicado encontrado.")
+        print("✅ Nenhuma combinação duplicada.")
 
     print("\n🎲 Gerando novos jogos...")
-    novos_jogos = gerar_novos_jogos(jogos_existentes)
+    novos = gerar_novos_jogos(jogos_existentes)
+    print(f"✅ {len(novos)} novos jogos gerados.")
 
-    print(f"✅ {len(novos_jogos)} novos jogos gerados com sucesso.")
-
-    salvar_novos_jogos(novos_jogos)
-
-    print(f"\n💾 Arquivo '{ARQUIVO_NOVOS}' criado com sucesso.")
+    salvar_novos_jogos(novos)
+    print(f"\n💾 Arquivo '{ARQUIVO_NOVOS}' criado/atualizado com sucesso.")
 
 
 if __name__ == "__main__":
